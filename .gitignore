@@ -85,3 +85,7 @@ zsdoc/data
 untracked/
 sandbox/
 tmp/
+
+# Nix build outputs
+result
+result-*
