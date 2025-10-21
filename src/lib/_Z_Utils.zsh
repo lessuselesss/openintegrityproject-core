@@ -3500,18 +3500,25 @@ function z_Check_SSH_Agent() {
 #   Starts and configures ssh-agent if not already running. Handles
 #   both interactive and non-interactive modes appropriately.
 #
-# Version: 0.1.00 (2025-10-21)
+# Version: 0.1.01 (2025-10-21)
 #
 # Change Log:
+#   - 0.1.01 (2025-10-21)
+#     * Added agent discovery to find existing agents before starting new one
+#     * Searches /tmp and $TMPDIR for agent sockets
+#     * Interactive mode offers to use found agents
+#     * Non-interactive mode auto-uses first found agent
+#     * Prevents unnecessary duplicate agent processes
 #   - 0.1.00 (2025-10-21)
 #     * Initial implementation for hardware signing support
 #     * Added interactive and non-interactive mode handling
 #     * Added agent startup and configuration
 #
 # Features:
-#   - Checks if agent is already running before starting
-#   - Interactive mode: Prompts user to start agent
-#   - Non-interactive mode: Provides instructions and exits
+#   - Discovers existing agent sockets before starting new agent
+#   - Tests found agents for responsiveness
+#   - Interactive mode: Offers to use existing or start new
+#   - Non-interactive mode: Auto-uses existing or provides instructions
 #   - Configures SSH_AUTH_SOCK environment variable
 #   - Returns socket path for session persistence
 #
@@ -3537,15 +3544,19 @@ function z_Check_SSH_Agent() {
 #   - Output_Prompt_Enabled global variable for mode detection
 #
 # Usage Examples:
-#   # Check and setup if needed:
+#   # Check and setup if needed (will discover existing agents first):
 #   z_Setup_SSH_Agent || return $?
 #
-#   # Get socket path:
+#   # Get socket path (auto-discovers or starts new):
 #   SocketPath=$(z_Setup_SSH_Agent) || return $?
 #   export SSH_AUTH_SOCK="$SocketPath"
 #
-#   # With custom socket path:
+#   # With custom socket path for new agent:
 #   z_Setup_SSH_Agent "/tmp/custom-ssh-agent.sock" || return $?
+#
+#   # In non-interactive mode, auto-uses first found agent:
+#   Output_Prompt_Enabled=$FALSE
+#   z_Setup_SSH_Agent || return $?
 #----------------------------------------------------------------------#
 function z_Setup_SSH_Agent() {
     typeset CustomSocket="${1:-}"
@@ -3557,7 +3568,74 @@ function z_Setup_SSH_Agent() {
         return $Exit_Status_Success
     fi
 
-    # Handle based on interactive vs non-interactive mode
+    # Agent not running - search for existing agent sockets before starting new one
+    z_Output info "Searching for existing ssh-agent sockets..."
+    typeset -a FoundAgents
+    typeset Socket SearchPath
+
+    # Search common locations for agent sockets
+    for SearchPath in /tmp ${TMPDIR:-/tmp}; do
+        # Skip if directory doesn't exist
+        [[ ! -d "$SearchPath" ]] && continue
+
+        # Find potential agent sockets
+        while IFS= read -r Socket; do
+            [[ -z "$Socket" ]] && continue
+
+            # Test if this agent is responsive
+            # Exit code 0 = has keys, 1 = no keys (but working), 2 = not responsive
+            if SSH_AUTH_SOCK="$Socket" ssh-add -l >/dev/null 2>&1; then
+                # Agent has keys and is responsive
+                FoundAgents+=("$Socket")
+            elif [[ $? -eq 1 ]]; then
+                # Agent has no keys but is alive (exit code 1 is normal)
+                FoundAgents+=("$Socket")
+            fi
+        done < <(find "$SearchPath" -maxdepth 2 -type s \( -name 'agent.*' -o -name 'ssh-*.agent.*' \) 2>/dev/null)
+    done
+
+    # If existing agents found, offer to use them
+    if (( ${#FoundAgents[@]} > 0 )); then
+        if (( Output_Prompt_Enabled == TRUE )); then
+            # Interactive mode - let user choose
+            z_Output success "Found ${#FoundAgents[@]} existing ssh-agent(s)"
+            z_Output info "Agent socket: ${FoundAgents[1]}"
+
+            typeset Response
+            print -n "Use existing agent? [Y/n]: "
+            read -r Response
+
+            if [[ ! "$Response" =~ ^[Nn]$ ]]; then
+                export SSH_AUTH_SOCK="${FoundAgents[1]}"
+
+                # Verify it's actually working
+                if z_Check_SSH_Agent > /dev/null 2>&1; then
+                    z_Output success "Using existing ssh-agent"
+                    z_Output info "Socket: $SSH_AUTH_SOCK"
+                    print -- "$SSH_AUTH_SOCK"
+                    return $Exit_Status_Success
+                else
+                    z_Output warn "Existing agent became unresponsive, will start new one"
+                fi
+            fi
+        else
+            # Non-interactive mode - auto-use first found agent
+            export SSH_AUTH_SOCK="${FoundAgents[1]}"
+
+            # Verify it's actually working
+            if z_Check_SSH_Agent > /dev/null 2>&1; then
+                z_Output success "Using existing ssh-agent (auto-detected)"
+                z_Output info "Socket: $SSH_AUTH_SOCK"
+                print -- "$SSH_AUTH_SOCK"
+                return $Exit_Status_Success
+            else
+                z_Output warn "Found agent became unresponsive"
+                # Fall through to provide instructions for non-interactive mode
+            fi
+        fi
+    fi
+
+    # No existing agents found or user declined - handle based on mode
     if (( Output_Prompt_Enabled == FALSE )); then
         # Non-interactive mode - provide instructions and exit
         z_Report_Error "ssh-agent is not running" $Exit_Status_Config
@@ -3570,14 +3648,14 @@ function z_Setup_SSH_Agent() {
         return $Exit_Status_Config
     fi
 
-    # Interactive mode - prompt user
-    z_Output warn "ssh-agent is not running"
+    # Interactive mode - prompt user to start new agent
+    z_Output warn "No usable ssh-agent found"
     z_Output info "ssh-agent is required for hardware-backed SSH keys"
     z_Output info ""
 
     # Prompt user to start agent
     typeset Response
-    print -n "Start ssh-agent now? [y/N]: "
+    print -n "Start new ssh-agent now? [y/N]: "
     read -r Response
 
     if [[ ! "$Response" =~ ^[Yy]$ ]]; then
