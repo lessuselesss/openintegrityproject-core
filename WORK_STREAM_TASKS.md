@@ -192,6 +192,119 @@ Implementation of enhanced Git inception repository script with improved error h
   - [x] Improved test infrastructure with better ANSI handling
   - [x] Added comprehensive documentation
 
+## Branch: [feature/hardware-signing]
+
+Implementation of hardware security key support for Git commit signing using FIDO2/U2F devices (YubiKey, Flipper Zero, Trezor, Ledger, etc.).
+
+**Related Issues:**
+- [ISSUES-setup_hardware_signing.md](src/issues/ISSUES-setup_hardware_signing.md)
+  > Documents issues with hardware key detection, SSH agent management, and git configuration for hardware-backed SSH signing.
+- [ISSUES-setup_git_inception_repo_hardware.md](src/issues/ISSUES-setup_git_inception_repo_hardware.md)
+  > Documents issues with integrated workflow combining hardware setup and inception repository creation.
+
+**Related Requirements:**
+- [REQUIREMENTS-setup_hardware_signing.md](src/requirements/REQUIREMENTS-setup_hardware_signing.md)
+  > Defines requirements for hardware key setup, device detection, and Git signing configuration.
+- [REQUIREMENTS-setup_git_inception_repo_hardware.md](src/requirements/REQUIREMENTS-setup_git_inception_repo_hardware.md)
+  > Defines requirements for integrated hardware signing and inception repository workflow.
+
+### Stage 1: Z_Utils Library Enhancement
+- [x] **Add hardware signing support functions to Z_Utils** (2025-10-21) [feature/hardware-signing]
+  - [x] Implement z_Detect_FIDO_Devices for hardware key detection
+  - [x] Implement z_Generate_Hardware_SSH_Key for ed25519-sk and ecdsa-sk key generation
+  - [x] Implement z_Setup_SSH_Agent for ssh-agent discovery and management
+  - [x] Implement z_Add_Key_To_SSH_Agent for key registration
+  - [x] Implement z_Configure_Git_SSH_Signing for Git signing configuration
+  - [x] Update _Z_Utils.zsh library version to 0.2.0
+
+### Stage 2: Standalone Hardware Signing Script
+- [x] **Create setup_hardware_signing.sh script** (2025-10-21) [feature/hardware-signing]
+  - [x] Implement parameter parsing for key type, git scope, and output path
+  - [x] Support ed25519-sk (FIDO2) and ecdsa-sk (U2F) key types
+  - [x] Support global and local git configuration scopes
+  - [x] Implement resident key support for passwordless authentication
+  - [x] Add interactive and non-interactive modes
+  - [x] Create comprehensive test script TEST-setup_hardware_signing.sh
+  - [x] Document requirements in REQUIREMENTS-setup_hardware_signing.md
+  - [x] Document issues in ISSUES-setup_hardware_signing.md
+
+### Stage 3: Integrated Hardware Inception Script
+- [x] **Create setup_git_inception_repo_hardware.sh script** (2025-10-21) [feature/hardware-signing]
+  - [x] Implement two-phase workflow: Phase 1 (hardware setup) → Phase 2 (repository creation)
+  - [x] Combine parameters from both parent scripts
+  - [x] Support all hardware signing options in repository creation workflow
+  - [x] Add force flag for repository overwrite
+  - [x] Create comprehensive test script TEST-setup_git_inception_repo_hardware.sh
+  - [x] Document requirements in REQUIREMENTS-setup_git_inception_repo_hardware.md
+  - [x] Document issues in ISSUES-setup_git_inception_repo_hardware.md
+
+### Stage 4: Testing
+- [x] **Create comprehensive test coverage** (2025-10-21) [feature/hardware-signing]
+  - [x] Test parameter parsing and validation for both scripts
+  - [x] Test dependency checking and error handling
+  - [x] Test invalid input rejection
+  - [x] Document test limitations (hardware operations require physical device)
+
+### Stage 5: Documentation
+- [x] **Document hardware signing implementation** (2025-10-21) [feature/hardware-signing]
+  - [x] Create requirements documents for both scripts
+  - [x] Create issues documents tracking known limitations
+  - [x] Document Z_Utils function additions
+  - [x] Add examples for different hardware devices (YubiKey, Flipper Zero)
+
+### Completed in this Branch
+- [x] **Hardware signing infrastructure** (2025-10-21) [feature/hardware-signing]
+  - [x] Added 5 Z_Utils functions for hardware key operations
+  - [x] Created standalone setup script with 11 exit codes for error handling
+  - [x] Created integrated workflow script combining hardware setup + inception commit
+  - [x] Created comprehensive test suites for both scripts
+  - [x] Documented 8 open issues for integrated script
+  - [x] Documented 15 open issues for standalone script
+  - [x] All scripts follow Zsh Core Scripting Best Practices
+  - [x] All commits signed with SSH signatures and DCO sign-off
+
+## Branch: [feature/nix-hardware-apps]
+
+Integration of hardware signing scripts into Nix flake for easy distribution and execution.
+
+**Related Issues:**
+- Addresses distribution and packaging needs for hardware signing scripts
+- Enables users to run scripts without cloning repository
+
+**Related Requirements:**
+- [Nix flake packaging standards](flake.nix)
+- Hardware signing script requirements from feature/hardware-signing branch
+
+### Stage 1: Flake Integration
+- [x] **Update flake.nix with hardware scripts** (2025-10-21) [feature/nix-hardware-apps]
+  - [x] Add setup_hardware_signing.sh to installation phase
+  - [x] Add setup_git_inception_repo_hardware.sh to installation phase
+  - [x] Create wrapper binaries: openintegrity-setup-hardware
+  - [x] Create wrapper binaries: openintegrity-setup-hardware-repo
+  - [x] Add PATH dependencies for git, openssh, gnupg, zsh
+
+### Stage 2: App Configuration
+- [x] **Create Nix apps for hardware scripts** (2025-10-21) [feature/nix-hardware-apps]
+  - [x] Add setup-hardware app pointing to openintegrity-setup-hardware
+  - [x] Add setup-hardware-repo app pointing to openintegrity-setup-hardware-repo
+  - [x] Maintain existing apps (audit, getdid, setup)
+  - [x] Verify default app still points to audit
+
+### Stage 3: DevShell Documentation
+- [x] **Update devShell help text** (2025-10-21) [feature/nix-hardware-apps]
+  - [x] Add "Hardware Signing Setup" section with script descriptions
+  - [x] Add examples for YubiKey (ed25519-sk) and Flipper Zero (ecdsa-sk)
+  - [x] Add Nix Apps section showing direct GitHub execution
+  - [x] Document integrated workflow with setup-hardware-repo
+
+### Completed in this Branch
+- [x] **Nix packaging for hardware signing** (2025-10-21) [feature/nix-hardware-apps]
+  - [x] Integrated both hardware signing scripts into flake
+  - [x] Created 2 new Nix apps (total: 5 apps)
+  - [x] Updated devShell help with comprehensive hardware signing documentation
+  - [x] Enabled direct execution: `nix run github:OpenIntegrityProject/core#setup-hardware`
+  - [x] All changes tested and validated with nix flake check
+
 ## Unassigned to Branch
 
 ### Testing Infrastructure
