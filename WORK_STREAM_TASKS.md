@@ -192,6 +192,48 @@ Implementation of enhanced Git inception repository script with improved error h
   - [x] Improved test infrastructure with better ANSI handling
   - [x] Added comprehensive documentation
 
+## Branch: [feature/nix-hardware-apps]
+
+Integration of hardware signing scripts into Nix flake for easy distribution and execution.
+
+**Related Issues:**
+- Addresses distribution and packaging needs for hardware signing scripts
+- Enables users to run scripts without cloning repository
+
+**Related Requirements:**
+- [Nix flake packaging standards](flake.nix)
+- Hardware signing script requirements from feature/hardware-signing branch
+
+### Stage 1: Flake Integration
+- [x] **Update flake.nix with hardware scripts** (2025-10-21) [feature/nix-hardware-apps]
+  - [x] Add setup_hardware_signing.sh to installation phase
+  - [x] Add setup_git_inception_repo_hardware.sh to installation phase
+  - [x] Create wrapper binaries: openintegrity-setup-hardware
+  - [x] Create wrapper binaries: openintegrity-setup-hardware-repo
+  - [x] Add PATH dependencies for git, openssh, gnupg, zsh
+
+### Stage 2: App Configuration
+- [x] **Create Nix apps for hardware scripts** (2025-10-21) [feature/nix-hardware-apps]
+  - [x] Add setup-hardware app pointing to openintegrity-setup-hardware
+  - [x] Add setup-hardware-repo app pointing to openintegrity-setup-hardware-repo
+  - [x] Maintain existing apps (audit, getdid, setup)
+  - [x] Verify default app still points to audit
+
+### Stage 3: DevShell Documentation
+- [x] **Update devShell help text** (2025-10-21) [feature/nix-hardware-apps]
+  - [x] Add "Hardware Signing Setup" section with script descriptions
+  - [x] Add examples for YubiKey (ed25519-sk) and Flipper Zero (ecdsa-sk)
+  - [x] Add Nix Apps section showing direct GitHub execution
+  - [x] Document integrated workflow with setup-hardware-repo
+
+### Completed in this Branch
+- [x] **Nix packaging for hardware signing** (2025-10-21) [feature/nix-hardware-apps]
+  - [x] Integrated both hardware signing scripts into flake
+  - [x] Created 2 new Nix apps (total: 5 apps)
+  - [x] Updated devShell help with comprehensive hardware signing documentation
+  - [x] Enabled direct execution: `nix run github:OpenIntegrityProject/core#setup-hardware`
+  - [x] All changes tested and validated with nix flake check
+
 ## Unassigned to Branch
 
 ### Testing Infrastructure
