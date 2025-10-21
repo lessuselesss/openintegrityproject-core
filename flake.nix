@@ -48,6 +48,8 @@
             install -m755 src/audit_inception_commit-POC.sh $out/share/openintegrity/src/
             install -m755 src/get_repo_did.sh $out/share/openintegrity/src/
             install -m755 src/setup_git_inception_repo.sh $out/share/openintegrity/src/
+            install -m755 src/setup_hardware_signing.sh $out/share/openintegrity/src/
+            install -m755 src/setup_git_inception_repo_hardware.sh $out/share/openintegrity/src/
             install -m755 src/snippet_template.sh $out/share/openintegrity/src/
 
             # Copy supporting files and directories
@@ -68,6 +70,14 @@
 
             makeWrapper $out/share/openintegrity/src/setup_git_inception_repo.sh \
               $out/bin/openintegrity-setup \
+              --prefix PATH : ${pkgs.lib.makeBinPath [ pkgs.git pkgs.openssh pkgs.gnupg pkgs.zsh ]}
+
+            makeWrapper $out/share/openintegrity/src/setup_hardware_signing.sh \
+              $out/bin/openintegrity-setup-hardware \
+              --prefix PATH : ${pkgs.lib.makeBinPath [ pkgs.git pkgs.openssh pkgs.gnupg pkgs.zsh ]}
+
+            makeWrapper $out/share/openintegrity/src/setup_git_inception_repo_hardware.sh \
+              $out/bin/openintegrity-setup-hardware-repo \
               --prefix PATH : ${pkgs.lib.makeBinPath [ pkgs.git pkgs.openssh pkgs.gnupg pkgs.zsh ]}
           '';
 
@@ -98,6 +108,8 @@
           audit = mkApp "openintegrity-audit";
           getdid = mkApp "openintegrity-getdid";
           setup = mkApp "openintegrity-setup";
+          setup-hardware = mkApp "openintegrity-setup-hardware";
+          setup-hardware-repo = mkApp "openintegrity-setup-hardware-repo";
 
           # Default app
           default = {
@@ -138,6 +150,17 @@
               ./src/setup_git_inception_repo.sh [OPTIONS]
                 → Setup Git inception repository
 
+            🔐 Hardware Signing Setup:
+              ./src/setup_hardware_signing.sh [OPTIONS]
+                → Configure hardware security keys for Git signing
+                → Supports: YubiKey, Flipper Zero, FIDO2/U2F devices
+                → Options: --key-type, --resident, --no-prompt
+
+              ./src/setup_git_inception_repo_hardware.sh [OPTIONS]
+                → Create repository with hardware-signed inception commit
+                → Integrated workflow: hardware setup + repository creation
+                → Options: --repo, --key-type, --force
+
             🧪 Testing:
               ./src/tests/TEST-audit_inception_commit.sh [--verbose]
                 → Run audit tests
@@ -165,8 +188,28 @@
               # Get repository DID
               ./src/get_repo_did.sh
 
+              # Setup hardware signing (YubiKey/FIDO2)
+              ./src/setup_hardware_signing.sh --key-type ed25519-sk
+
+              # Setup hardware signing (Flipper Zero/U2F)
+              ./src/setup_hardware_signing.sh --key-type ecdsa-sk
+
+              # Create repository with hardware-signed inception commit
+              ./src/setup_git_inception_repo_hardware.sh --repo my_secure_repo
+
             🔧 Development Tools Available:
               git, zsh, openssh, gnupg, gh (GitHub CLI)
+
+            📦 Nix Apps (run without cloning):
+              # Run from GitHub directly
+              nix run github:OpenIntegrityProject/core#audit
+              nix run github:OpenIntegrityProject/core#getdid
+              nix run github:OpenIntegrityProject/core#setup
+              nix run github:OpenIntegrityProject/core#setup-hardware
+              nix run github:OpenIntegrityProject/core#setup-hardware-repo
+
+              # Or install globally
+              nix profile install github:OpenIntegrityProject/core
 
             ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
             📖 For more information: https://OpenIntegrityProject.info
