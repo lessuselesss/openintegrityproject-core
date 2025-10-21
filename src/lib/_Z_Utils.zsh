@@ -3349,6 +3349,237 @@ function z_Setup_Git_Environment() {
     return $Exit_Status_Success
 }
 
+#----------------------------------------------------------------------#
+# Function: z_Check_SSH_Agent
+#----------------------------------------------------------------------#
+# Description:
+#   Verifies that ssh-agent is running and accessible for SSH key
+#   operations. This function checks for the SSH_AUTH_SOCK environment
+#   variable and validates that the agent is responsive.
+#
+# Version: 0.1.00 (2025-10-21)
+#
+# Change Log:
+#   - 0.1.00 (2025-10-21)
+#     * Initial implementation for hardware signing support
+#     * Added ssh-agent socket verification
+#     * Added agent responsiveness check
+#
+# Features:
+#   - SSH_AUTH_SOCK environment variable validation
+#   - Socket file existence verification
+#   - Agent responsiveness testing via ssh-add -l
+#   - Detailed error reporting for troubleshooting
+#
+# Parameters:
+#   None
+#
+# Returns:
+#   Exit_Status_Success (0) when ssh-agent is running and responsive
+#   Exit_Status_Config (6) when SSH_AUTH_SOCK is not set
+#   Exit_Status_IO (3) when socket file doesn't exist
+#   Exit_Status_General (1) when agent is not responsive
+#
+# Runtime Impact:
+#   - Reads SSH_AUTH_SOCK environment variable
+#   - Tests socket file existence
+#   - Executes ssh-add -l to verify agent responds
+#   - Outputs status information
+#
+# Dependencies:
+#   - ssh-add command
+#   - SSH_AUTH_SOCK environment variable
+#   - z_Output function for formatted output
+#   - z_Report_Error function for error reporting
+#
+# Usage Examples:
+#   # Basic check with error propagation:
+#   z_Check_SSH_Agent || return $?
+#
+#   # With custom error handling:
+#   if ! z_Check_SSH_Agent; then
+#     z_Output error "ssh-agent is required for hardware signing"
+#     z_Output info "Start ssh-agent: eval \$(ssh-agent -s)"
+#     return $Exit_Status_Config
+#   fi
+#
+#   # Silent check:
+#   if z_Check_SSH_Agent > /dev/null 2>&1; then
+#     # Agent is running
+#   fi
+#----------------------------------------------------------------------#
+function z_Check_SSH_Agent() {
+    # Check if SSH_AUTH_SOCK is set
+    if [[ -z "${SSH_AUTH_SOCK:-}" ]]; then
+        z_Report_Error "SSH_AUTH_SOCK environment variable is not set" $Exit_Status_Config
+        z_Output info "ssh-agent is not running or not configured"
+        z_Output info "Start ssh-agent: eval \$(ssh-agent -s)"
+        return $Exit_Status_Config
+    fi
+
+    # Verify socket file exists
+    if [[ ! -S "$SSH_AUTH_SOCK" ]]; then
+        z_Report_Error "SSH agent socket does not exist: $SSH_AUTH_SOCK" $Exit_Status_IO
+        z_Output info "The socket file may have been removed or ssh-agent stopped"
+        z_Output info "Restart ssh-agent: eval \$(ssh-agent -s)"
+        return $Exit_Status_IO
+    fi
+
+    # Test if agent is responsive
+    if ! ssh-add -l > /dev/null 2>&1; then
+        typeset -i AgentExitCode=$?
+        # Exit code 1 means agent has no identities (but is working)
+        # Exit code 2 means agent is not responsive
+        if (( AgentExitCode == 2 )); then
+            z_Report_Error "ssh-agent is not responsive" $Exit_Status_General
+            z_Output info "The agent process may have crashed"
+            z_Output info "Restart ssh-agent: eval \$(ssh-agent -s)"
+            return $Exit_Status_General
+        fi
+    fi
+
+    # Agent is running and responsive
+    return $Exit_Status_Success
+}
+
+#----------------------------------------------------------------------#
+# Function: z_Setup_SSH_Agent
+#----------------------------------------------------------------------#
+# Description:
+#   Starts and configures ssh-agent if not already running. Handles
+#   both interactive and non-interactive modes appropriately.
+#
+# Version: 0.1.00 (2025-10-21)
+#
+# Change Log:
+#   - 0.1.00 (2025-10-21)
+#     * Initial implementation for hardware signing support
+#     * Added interactive and non-interactive mode handling
+#     * Added agent startup and configuration
+#
+# Features:
+#   - Checks if agent is already running before starting
+#   - Interactive mode: Prompts user to start agent
+#   - Non-interactive mode: Provides instructions and exits
+#   - Configures SSH_AUTH_SOCK environment variable
+#   - Returns socket path for session persistence
+#
+# Parameters:
+#   $1 - Optional: custom socket path
+#
+# Returns:
+#   Exit_Status_Success (0) when agent is running (prints socket path to stdout)
+#   Exit_Status_Config (6) in non-interactive mode when agent not running
+#   Exit_Status_General (1) when agent fails to start
+#
+# Runtime Impact:
+#   - May start ssh-agent process
+#   - Sets SSH_AUTH_SOCK environment variable
+#   - Outputs instructions and status information
+#   - In interactive mode, may prompt user
+#
+# Dependencies:
+#   - ssh-agent command
+#   - z_Check_SSH_Agent function
+#   - z_Output function for formatted output
+#   - z_Report_Error function for error reporting
+#   - Output_Prompt_Enabled global variable for mode detection
+#
+# Usage Examples:
+#   # Check and setup if needed:
+#   z_Setup_SSH_Agent || return $?
+#
+#   # Get socket path:
+#   SocketPath=$(z_Setup_SSH_Agent) || return $?
+#   export SSH_AUTH_SOCK="$SocketPath"
+#
+#   # With custom socket path:
+#   z_Setup_SSH_Agent "/tmp/custom-ssh-agent.sock" || return $?
+#----------------------------------------------------------------------#
+function z_Setup_SSH_Agent() {
+    typeset CustomSocket="${1:-}"
+
+    # Check if agent is already running
+    if z_Check_SSH_Agent > /dev/null 2>&1; then
+        z_Output success "ssh-agent is already running"
+        print -- "$SSH_AUTH_SOCK"
+        return $Exit_Status_Success
+    fi
+
+    # Handle based on interactive vs non-interactive mode
+    if (( Output_Prompt_Enabled == FALSE )); then
+        # Non-interactive mode - provide instructions and exit
+        z_Report_Error "ssh-agent is not running" $Exit_Status_Config
+        z_Output info "In non-interactive mode, ssh-agent must be started manually"
+        z_Output info ""
+        z_Output info "To start ssh-agent, run:"
+        z_Output info "  eval \$(ssh-agent -s)"
+        z_Output info ""
+        z_Output info "Then re-run this script with the SSH_AUTH_SOCK set"
+        return $Exit_Status_Config
+    fi
+
+    # Interactive mode - prompt user
+    z_Output warn "ssh-agent is not running"
+    z_Output info "ssh-agent is required for hardware-backed SSH keys"
+    z_Output info ""
+
+    # Prompt user to start agent
+    typeset Response
+    print -n "Start ssh-agent now? [y/N]: "
+    read -r Response
+
+    if [[ ! "$Response" =~ ^[Yy]$ ]]; then
+        z_Report_Error "ssh-agent setup cancelled by user" $Exit_Status_General
+        z_Output info "To start manually: eval \$(ssh-agent -s)"
+        return $Exit_Status_General
+    fi
+
+    # Start ssh-agent
+    z_Output info "Starting ssh-agent..."
+    typeset AgentOutput SocketPath
+
+    if [[ -n "$CustomSocket" ]]; then
+        # Use custom socket path
+        AgentOutput=$(ssh-agent -a "$CustomSocket" 2>&1)
+    else
+        # Use default socket path
+        AgentOutput=$(ssh-agent -s 2>&1)
+    fi
+
+    if [[ $? -ne 0 ]]; then
+        z_Report_Error "Failed to start ssh-agent" $Exit_Status_General
+        z_Output error "ssh-agent output: $AgentOutput"
+        return $Exit_Status_General
+    fi
+
+    # Extract socket path from output
+    SocketPath=$(print -- "$AgentOutput" | grep -o 'SSH_AUTH_SOCK=[^;]*' | cut -d= -f2)
+
+    if [[ -z "$SocketPath" ]]; then
+        z_Report_Error "Failed to extract SSH_AUTH_SOCK from ssh-agent output" $Exit_Status_General
+        return $Exit_Status_General
+    fi
+
+    # Set environment variable
+    export SSH_AUTH_SOCK="$SocketPath"
+
+    # Verify agent is now running
+    if ! z_Check_SSH_Agent > /dev/null 2>&1; then
+        z_Report_Error "ssh-agent started but is not responsive" $Exit_Status_General
+        return $Exit_Status_General
+    fi
+
+    z_Output success "ssh-agent started successfully"
+    z_Output info "Socket: $SSH_AUTH_SOCK"
+    z_Output warn "Note: This session's ssh-agent will not persist after logout"
+    z_Output info "To persist, add to your shell profile: eval \$(ssh-agent -s)"
+
+    # Return socket path
+    print -- "$SSH_AUTH_SOCK"
+    return $Exit_Status_Success
+}
+
 ########################################################################
 ##                        END OF LIBRARY
 ########################################################################
